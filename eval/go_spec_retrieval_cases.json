@@ -1,0 +1,107 @@
+[
+  {
+    "id": "arrays-vs-slices",
+    "query": "What is the difference between arrays and slices?",
+    "expected_anchors": ["Array_types", "Slice_types"]
+  },
+  {
+    "id": "slice-comparable",
+    "query": "Are slices comparable in Go?",
+    "expected_anchors": ["Comparison_operators", "Slice_types"]
+  },
+  {
+    "id": "array-comparable",
+    "query": "When is an array type comparable?",
+    "expected_anchors": ["Comparison_operators"]
+  },
+  {
+    "id": "map-key",
+    "query": "What types can be map keys?",
+    "expected_anchors": ["Map_types"]
+  },
+  {
+    "id": "nil-slice-length",
+    "query": "What are len and cap of a nil slice?",
+    "expected_anchors": ["Length_and_capacity", "Slice_types"]
+  },
+  {
+    "id": "type-set",
+    "query": "How do interface type sets work?",
+    "expected_anchors": ["Interface_types"]
+  },
+  {
+    "id": "underlying-type",
+    "query": "What is an underlying type?",
+    "expected_anchors": ["Types"]
+  },
+  {
+    "id": "assignability",
+    "query": "When is a value assignable to a variable type?",
+    "expected_anchors": ["Assignability"]
+  },
+  {
+    "id": "slice-to-array",
+    "query": "When can a slice be converted to an array pointer?",
+    "expected_anchors": ["Conversions_from_slice_to_array_or_array_pointer"]
+  },
+  {
+    "id": "method-set",
+    "query": "What is included in a method set?",
+    "expected_anchors": ["Method_sets"]
+  },
+  {
+    "id": "goroutine",
+    "query": "How do you start a goroutine?",
+    "expected_anchors": ["Go_statements"]
+  },
+  {
+    "id": "defer",
+    "query": "When is a deferred function executed?",
+    "expected_anchors": ["Defer_statements"]
+  },
+  {
+    "id": "panic-recover",
+    "query": "How does panic and recover work in Go?",
+    "expected_anchors": ["Handling_panics", "Run_time_panics"]
+  },
+  {
+    "id": "type-inference",
+    "query": "How does Go infer types from arguments?",
+    "expected_anchors": ["Type_inference"]
+  },
+  {
+    "id": "for-range",
+    "query": "What values does a for-range loop produce for slices and maps?",
+    "expected_anchors": ["For_range", "For_statements"]
+  },
+  {
+    "id": "string-conversion",
+    "query": "How do you convert a string to a rune slice?",
+    "expected_anchors": ["Conversions_to_and_from_a_string_type"]
+  },
+  {
+    "id": "iota",
+    "query": "What does the predeclared identifier iota represent?",
+    "expected_anchors": ["Iota", "Constant_declarations"]
+  },
+  {
+    "id": "constant-expressions",
+    "query": "What rules govern constant expressions in Go?",
+    "expected_anchors": ["Constant_expressions", "Constants"]
+  },
+  {
+    "id": "type-switch",
+    "query": "How does a type switch work in Go?",
+    "expected_anchors": ["Type_switches"]
+  },
+  {
+    "id": "select-statement",
+    "query": "How do you wait on multiple channel operations with select?",
+    "expected_anchors": ["Select_statements"]
+  },
+  {
+    "id": "send-statement",
+    "query": "How do you send a value to a channel?",
+    "expected_anchors": ["Send_statements", "Channel_types"]
+  }
+]
