@@ -1,0 +1,65 @@
+[project]
+name = "learning-go-rag"
+version = "0.1.0"
+description = "Local deterministic RAG over the Go language specification."
+requires-python = ">=3.12"
+dependencies = [
+  "beautifulsoup4>=4.12.3",
+  "chonkie>=0.5.1",
+  "chromadb>=0.5.23",
+  "deal>=4.24.5",
+  "lxml>=5.3.0",
+  "rank-bm25>=0.2.2",
+]
+
+[dependency-groups]
+dev = [
+  "bandit[toml]>=1.8.0",
+  "basedpyright>=1.23.1",
+  "crosshair-tool>=0.0.82",
+  "hypothesis>=6.122.0",
+  "pytest>=8.3.4",
+  "radon>=6.0.1",
+  "ruff>=0.8.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+  "B",
+  "C4",
+  "C901",
+  "E",
+  "F",
+  "I",
+  "RET",
+  "RUF",
+  "SIM",
+  "UP",
+]
+mccabe.max-complexity = 10
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.basedpyright]
+include = ["scripts", "tests"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportUnknownArgumentType = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["."]
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests"]
+skips = []
