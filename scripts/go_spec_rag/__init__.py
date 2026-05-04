@@ -1,0 +1,29 @@
+"""Deterministic local RAG helpers for the Go language specification."""
+
+from scripts.go_spec_rag.config import (
+    DEFAULT_CHROMA_PATH,
+    DEFAULT_COLLECTION,
+    DEFAULT_CORPUS_PATH,
+    DEFAULT_DISTANCE_METRIC,
+    DEFAULT_MANIFEST_PATH,
+    DEFAULT_MODEL,
+    DEFAULT_OLLAMA_URL,
+    DEFAULT_QUERY_PREFIX,
+    DEFAULT_SPEC_HTML,
+    ROOT,
+    SPEC_BASE_URL,
+)
+
+__all__ = [
+    "DEFAULT_CHROMA_PATH",
+    "DEFAULT_COLLECTION",
+    "DEFAULT_CORPUS_PATH",
+    "DEFAULT_DISTANCE_METRIC",
+    "DEFAULT_MANIFEST_PATH",
+    "DEFAULT_MODEL",
+    "DEFAULT_OLLAMA_URL",
+    "DEFAULT_QUERY_PREFIX",
+    "DEFAULT_SPEC_HTML",
+    "ROOT",
+    "SPEC_BASE_URL",
+]
