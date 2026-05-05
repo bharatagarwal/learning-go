@@ -9,7 +9,7 @@ Use `uv` for all Python tooling:
 
 ```bash
 uv sync --group dev
-ollama pull mxbai-embed-large
+ollama pull bge-m3
 ```
 
 Do not use `pip` in this repo.
@@ -92,21 +92,23 @@ compare retrieval strategies.
 
 ## Model Notes
 
-`mxbai-embed-large` is the Ollama package for
-`mixedbread-ai/mxbai-embed-large-v1`.
+`bge-m3` is the Ollama package for `BAAI/bge-m3`.
 
-- Ollama lists it as a 335M embedding model with a 512-token context window:
-  https://ollama.com/library/mxbai-embed-large
-- The Hugging Face model card says retrieval queries should use the prefix
-  `Represent this sentence for searching relevant passages: `, while documents do
-  not need a prompt: https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1
+- Ollama lists it as a 567M embedding model with an 8192-token context window:
+  https://ollama.com/library/bge-m3
+- The Hugging Face model card states bge-m3 is symmetric — queries and
+  documents use the same embedding path, no query prefix required:
+  https://huggingface.co/BAAI/bge-m3
+- Strong multilingual support across 100+ languages, with documented Hindi
+  retrieval performance (Hindi-BEIR 47.29 nDCG@10).
 - Ollama's `/api/embed` endpoint supports `truncate`; this repo sets
   `truncate: false` so oversize chunks fail loudly:
   https://ollama.readthedocs.io/en/api/#generate-embeddings
 
-Because the model has a short context window, the default chunk size is 1000
-characters. If a future model rejects that size, rebuild with a smaller
-`--chunk-size`.
+The default chunk size is a conservative 1000 characters. bge-m3's 8K-token
+context window makes much larger chunks safe — experiment with
+`--chunk-size 4000` and measure with `eval_go_spec_retrieval.py` before
+committing to a new default.
 
 ## Quality Gate
 

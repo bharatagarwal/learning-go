@@ -22,7 +22,7 @@ same Ollama embedding model used to build the ChromaDB collection. Do not pass a
 different embedding model at query time. Rebuild the index instead:
 
 ```bash
-uv run python scripts/index_go_spec.py --model mxbai-embed-large
+uv run python scripts/index_go_spec.py --model bge-m3
 ```
 
 The indexer uses Chonkie's `RecursiveChunker` with a 1000-character default chunk
@@ -30,9 +30,10 @@ size and asks Ollama to embed with truncation disabled. If a future model reject
 that chunk size, rebuild with a smaller `--chunk-size` rather than allowing silent
 truncation.
 
-For `mxbai-embed-large`, the manifest records the query prefix recommended by the
-upstream model card: `Represent this sentence for searching relevant passages: `.
-The query command applies that prefix to user questions before embedding; indexed
-spec chunks are embedded without a prefix.
+`bge-m3` is symmetric — queries and documents share the same embedding path,
+so the manifest records an empty query prefix. If you switch to a model that
+requires a query prefix (e.g. `mxbai-embed-large` wants
+`Represent this sentence for searching relevant passages: `), rebuild the
+index so the manifest captures it.
 
 Use `uv` or `uvx` for all Python tooling in this repo. Do not use `pip`.

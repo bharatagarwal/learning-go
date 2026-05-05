@@ -48,8 +48,9 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=1000,
         help=(
-            "Character chunk size for Chonkie's RecursiveChunker. The default fits "
-            "mxbai-embed-large with Ollama truncation disabled."
+            "Character chunk size for Chonkie's RecursiveChunker. The default is "
+            "conservative; bge-m3 supports up to ~8K tokens per input, so larger "
+            "chunks are safe — measure the impact with eval_go_spec_retrieval.py."
         ),
     )
     parser.add_argument("--batch-size", type=int, default=32)

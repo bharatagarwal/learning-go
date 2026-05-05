@@ -250,7 +250,7 @@ def test_render_codex_includes_citation_instruction() -> None:
 def test_render_markdown_includes_model_info() -> None:
     payload = make_minimal_payload()
     result = render_markdown(payload)
-    assert "mxbai-embed-large" in result
+    assert "bge-m3" in result
 
 
 # --- Truncate function tests ---
@@ -613,8 +613,8 @@ def test_config_constants_are_well_formed() -> None:
     assert ROOT.exists()
     assert DEFAULT_COLLECTION == "go_spec"
     assert DEFAULT_DISTANCE_METRIC == "cosine"
-    assert "mxbai" in DEFAULT_MODEL
-    assert "searching" in DEFAULT_QUERY_PREFIX
+    assert DEFAULT_MODEL == "bge-m3"
+    assert DEFAULT_QUERY_PREFIX == ""
     assert SPEC_BASE_URL == "https://go.dev/ref/spec"
 
 
@@ -627,7 +627,7 @@ def make_minimal_payload() -> dict:
         "query": "test query",
         "query_sha256": "abc123",
         "manifest_sha256": "def456",
-        "embedding": {"provider": "ollama", "model": "mxbai-embed-large", "query_prefix": ""},
+        "embedding": {"provider": "ollama", "model": "bge-m3", "query_prefix": ""},
         "retrieval": {"mode": "hybrid"},
         "matches": [],
         "context_chunks": [],
