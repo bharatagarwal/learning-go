@@ -32,8 +32,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--retrieval-mode",
-        choices=["hybrid", "vector", "lexical"],
+        choices=["hybrid", "vector", "lexical", "cosine"],
         default="hybrid",
+    )
+    parser.add_argument(
+        "--similarity-threshold",
+        type=float,
+        default=0.0,
+        help=(
+            "Drop matches with cosine similarity below this floor. Used by --retrieval-mode cosine."
+        ),
     )
     parser.add_argument("--semantic-candidates", type=int, default=32)
     parser.add_argument("--lexical-candidates", type=int, default=32)
@@ -74,6 +82,7 @@ def main() -> int:
             lexical_candidates=args.lexical_candidates,
             parent_results=args.parent_results,
             max_parent_chars=args.max_parent_chars,
+            similarity_threshold=args.similarity_threshold,
         )
         if output_format == "json":
             print(render_json(payload), end="")

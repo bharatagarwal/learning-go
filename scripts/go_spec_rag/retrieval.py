@@ -86,7 +86,16 @@ def query_index(
     parent_results: int = 4,
     max_parent_chars: int = 5000,
     retrieval_mode: str = "hybrid",
+    similarity_threshold: float = 0.0,
 ) -> dict[str, Any]:
+    if retrieval_mode == "cosine":
+        return cosine_query_index(
+            query,
+            manifest_path=manifest_path,
+            n_results=n_results,
+            similarity_threshold=similarity_threshold,
+            max_parent_chars=max_parent_chars,
+        )
     manifest = load_manifest(manifest_path)
     corpus = read_corpus(resolve_repo_path(manifest.index.corpus_path))
     collection = get_collection(
@@ -281,6 +290,105 @@ def semantic_rank(matches: list[SearchMatch], candidate: SearchMatch) -> int:
         if match.parent_id == candidate.parent_id:
             return match.rank
     return len(matches) + 1
+
+
+def cosine_query_index(
+    query: str,
+    *,
+    manifest_path: Path,
+    n_results: int,
+    similarity_threshold: float,
+    max_parent_chars: int,
+) -> dict[str, Any]:
+    """Radically simple retrieval: pure cosine top-K with a similarity floor.
+
+    Skips query-variant expansion, lexical search, RRF, per-parent
+    diversification, and context-window expansion. The query is embedded
+    once with the manifest's recorded prefix, ChromaDB returns top-K by
+    cosine distance, and matches with similarity below the threshold are
+    dropped. Parent contexts are still emitted so eval and downstream
+    consumers see the same payload shape as hybrid mode.
+    """
+    manifest = load_manifest(manifest_path)
+    corpus = read_corpus(resolve_repo_path(manifest.index.corpus_path))
+    collection = get_collection(
+        resolve_repo_path(manifest.index.chroma_path),
+        manifest.index.collection,
+    )
+    embedder = OllamaEmbeddingClient(
+        model=manifest.embedding.model,
+        base_url=manifest.embedding.base_url,
+    )
+    query_embedding = embedder.embed(manifest.embedding.query_prefix + query)
+    bounded_n = bounded_int(n_results, 1, 50)
+    result = cast(
+        dict[str, Any],
+        collection.query(
+            query_embeddings=[query_embedding],
+            n_results=bounded_n,
+            include=["distances"],
+        ),
+    )
+    matches = cosine_matches(corpus, result, similarity_threshold)
+    parents = parent_contexts(
+        corpus=corpus,
+        matches=matches,
+        limit=max(1, len(matches)),
+        max_chars=bounded_int(max_parent_chars, 500, 20000),
+    )
+    return retrieval_payload(
+        query=query,
+        variants=[query],
+        manifest_path=manifest_path,
+        manifest=manifest,
+        retrieval_mode="cosine",
+        matches=matches,
+        context_chunks=matches,
+        parents=parents,
+        n_results=n_results,
+        context_window=0,
+        semantic_candidates=bounded_n,
+        lexical_candidates=0,
+    )
+
+
+def cosine_matches(
+    corpus: Corpus,
+    chroma_result: dict[str, Any],
+    similarity_threshold: float,
+) -> list[SearchMatch]:
+    ids = cast(list[str], chroma_result.get("ids", [[]])[0])
+    distances = cast(list[float], chroma_result.get("distances", [[]])[0])
+    chunks_by_id = corpus.chunks_by_id
+    matches: list[SearchMatch] = []
+    rank = 0
+    for chunk_id, distance in zip(ids, distances, strict=False):
+        cosine_score = max(0.0, 1.0 - float(distance))
+        if cosine_score < similarity_threshold:
+            continue
+        chunk = chunks_by_id.get(str(chunk_id))
+        if chunk is None:
+            continue
+        rank += 1
+        metadata = chunk.metadata
+        matches.append(
+            SearchMatch(
+                rank=rank,
+                id=chunk.id,
+                distance=float(distance),
+                title=str(metadata.get("title") or "Untitled section"),
+                anchor=str(metadata.get("anchor") or ""),
+                url=str(metadata.get("url") or ""),
+                chunk_index=int(metadata.get("chunk_index") or 0),
+                text=chunk.text,
+                parent_id=str(metadata.get("parent_id") or ""),
+                score=cosine_score,
+                vector_score=cosine_score,
+                lexical_score=0.0,
+                sources="vector",
+            )
+        )
+    return matches
 
 
 def retrieval_payload(

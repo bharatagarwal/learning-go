@@ -49,6 +49,7 @@ def evaluate_case(case: EvalCase, args: argparse.Namespace) -> dict[str, Any]:
         lexical_candidates=args.lexical_candidates,
         parent_results=args.parent_results,
         max_parent_chars=args.max_parent_chars,
+        similarity_threshold=args.similarity_threshold,
     )
     parent_anchors = [str(parent["anchor"]) for parent in payload["parent_contexts"]]
     child_anchors = [str(match["anchor"]) for match in payload["matches"]]
@@ -97,8 +98,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST_PATH)
     parser.add_argument(
         "--retrieval-mode",
-        choices=["hybrid", "vector", "lexical"],
+        choices=["hybrid", "vector", "lexical", "cosine"],
         default="hybrid",
+    )
+    parser.add_argument(
+        "--similarity-threshold",
+        type=float,
+        default=0.0,
+        help=(
+            "Drop matches with cosine similarity below this floor. Used by --retrieval-mode cosine."
+        ),
     )
     parser.add_argument("--n-results", type=int, default=8)
     parser.add_argument("--context-window", type=int, default=1)
