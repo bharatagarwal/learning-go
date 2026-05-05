@@ -70,6 +70,51 @@ def test_parse_sections_and_chunk_small_html(tmp_path: Path) -> None:
     assert "parent_id" in records[0].metadata
 
 
+def test_chunk_sections_with_overlap_extends_chunks(tmp_path: Path) -> None:
+    spec = tmp_path / "spec.html"
+    paragraph_a = (
+        "Slice types describe the relationship between a slice and its underlying array. " * 8
+    )
+    paragraph_b = (
+        "Map types are unordered collections of key-value pairs. The key type must be comparable. "
+        * 8
+    )
+    spec.write_text(
+        f"""
+        <html><body><article>
+          <h2 id="Slice_types">Slice types</h2>
+          <p>{paragraph_a}</p>
+          <p>{paragraph_b}</p>
+        </article></body></html>
+        """,
+        encoding="utf-8",
+    )
+
+    sections = parse_sections(spec)
+    no_overlap = chunk_sections(sections, chunk_size=400, chunk_overlap=0, source_file=spec)
+    with_overlap = chunk_sections(sections, chunk_size=400, chunk_overlap=80, source_file=spec)
+
+    assert len(no_overlap) >= 2
+    assert len(with_overlap) == len(no_overlap)
+    longer_count = sum(
+        len(b.text) > len(a.text) for a, b in zip(no_overlap, with_overlap, strict=True)
+    )
+    assert longer_count >= 1
+
+
+def test_chunk_sections_rejects_overlap_at_or_above_chunk_size(tmp_path: Path) -> None:
+    spec = tmp_path / "spec.html"
+    spec.write_text(
+        '<html><body><article><h2 id="X">X</h2><p>text</p></article></body></html>',
+        encoding="utf-8",
+    )
+    sections = parse_sections(spec)
+    with pytest.raises(ValueError, match="chunk_overlap"):
+        chunk_sections(sections, chunk_size=100, chunk_overlap=100, source_file=spec)
+    with pytest.raises(ValueError, match="chunk_overlap"):
+        chunk_sections(sections, chunk_size=100, chunk_overlap=-1, source_file=spec)
+
+
 def test_query_variants_add_spec_terms() -> None:
     variants = query_variants("Are slices comparable?")
     assert variants[0] == "Are slices comparable?"

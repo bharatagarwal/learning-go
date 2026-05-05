@@ -53,6 +53,18 @@ def build_parser() -> argparse.ArgumentParser:
             "chunks are safe — measure the impact with eval_go_spec_retrieval.py."
         ),
     )
+    parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        default=0,
+        help=(
+            "Character overlap between adjacent chunks within a section. Industry "
+            "default is 10-20%% of chunk_size, but the Go spec's tight section "
+            "boundaries mean overlap mostly leaks adjacent topics into each chunk. "
+            "The default of 0 preserves the no-overlap behavior the eval validated; "
+            "try 100-150 on prose-heavy corpora and measure with eval_go_spec_retrieval.py."
+        ),
+    )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument(
         "--no-reset",
@@ -77,13 +89,24 @@ def main() -> int:
     if args.chunk_size < 1:
         print("--chunk-size must be positive", file=sys.stderr)
         return 2
+    if args.chunk_overlap < 0:
+        print("--chunk-overlap must be non-negative", file=sys.stderr)
+        return 2
+    if args.chunk_overlap >= args.chunk_size:
+        print("--chunk-overlap must be smaller than --chunk-size", file=sys.stderr)
+        return 2
     if args.batch_size < 1:
         print("--batch-size must be positive", file=sys.stderr)
         return 2
 
     sections = parse_sections(args.spec_html)
     parents = build_parent_records(sections)
-    records = chunk_sections(sections, chunk_size=args.chunk_size, source_file=args.spec_html)
+    records = chunk_sections(
+        sections,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+        source_file=args.spec_html,
+    )
     print(f"Parsed {len(sections)} sections into {len(records)} chunks.", file=sys.stderr)
 
     if args.dry_run:
@@ -116,6 +139,7 @@ def main() -> int:
         model=args.model,
         ollama_url=args.ollama_url,
         chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
         parent_count=len(parents),
         section_count=len(sections),
         chunk_count=count,

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import chromadb
-from chonkie import RecursiveChunker
+from chonkie import OverlapRefinery, RecursiveChunker
 
 from scripts.go_spec_rag.config import (
     DEFAULT_CORPUS_PATH,
@@ -41,16 +41,35 @@ def chunk_sections(
     sections: Sequence[Section],
     *,
     chunk_size: int,
+    chunk_overlap: int = 0,
     source_file: Path = DEFAULT_SPEC_HTML,
 ) -> list[ChunkRecord]:
+    if chunk_overlap < 0:
+        raise ValueError("chunk_overlap must be non-negative")
+    if chunk_overlap >= chunk_size:
+        raise ValueError("chunk_overlap must be smaller than chunk_size")
     chunker = RecursiveChunker(tokenizer="character", chunk_size=chunk_size)
+    refinery = (
+        OverlapRefinery(
+            tokenizer="character",
+            context_size=chunk_overlap,
+            mode="recursive",
+            method="prefix",
+            merge=True,
+        )
+        if chunk_overlap > 0
+        else None
+    )
     records: list[ChunkRecord] = []
 
     for section_index, section in enumerate(sections):
         source_url = f"{SPEC_BASE_URL}#{section.anchor}" if section.anchor else SPEC_BASE_URL
         parent_id = stable_section_id(section_index, section.anchor, section.title)
         section_text = f"# {section.title}\n\n{section.text}"
-        chunks = cast(Iterable[Any], chunker(section_text))
+        section_chunks = list(cast(Iterable[Any], chunker(section_text)))
+        if refinery is not None and len(section_chunks) > 1:
+            section_chunks = list(cast(Iterable[Any], refinery(section_chunks)))
+        chunks = section_chunks
 
         for chunk_index, chunk in enumerate(chunks):
             text = clean_text(str(chunk.text))
@@ -184,6 +203,7 @@ def build_manifest(
     model: str,
     ollama_url: str,
     chunk_size: int,
+    chunk_overlap: int,
     parent_count: int,
     section_count: int,
     chunk_count: int,
@@ -203,6 +223,7 @@ def build_manifest(
             chunker="RecursiveChunker",
             tokenizer="character",
             chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
         ),
         embedding=EmbeddingConfig(
             provider="ollama",

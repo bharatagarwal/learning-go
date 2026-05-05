@@ -56,6 +56,7 @@ class ChunkingConfig:
     chunker: str
     tokenizer: str
     chunk_size: int
+    chunk_overlap: int = 0
 
 
 @dataclass(frozen=True)
