@@ -8,19 +8,11 @@ from hypothesis import strategies as st
 
 from scripts.go_spec_rag.corpus import Corpus, read_corpus, write_corpus
 from scripts.go_spec_rag.indexing import batched, chunk_sections
-from scripts.go_spec_rag.lexical import lexical_search, query_variants, tokenize
-from scripts.go_spec_rag.models import ChunkRecord, ParentRecord
+from scripts.go_spec_rag.models import ChunkRecord, ParentRecord, SearchMatch
 from scripts.go_spec_rag.parse import parse_sections
 from scripts.go_spec_rag.pure import bounded_int, clean_text, short_sha256, stable_chunk_id
 from scripts.go_spec_rag.render import render, render_codex, render_json, render_markdown
-from scripts.go_spec_rag.rerank import (
-    candidates_to_matches,
-    merge_scores,
-    parent_contexts,
-    rrf_score,
-    scores_to_ranks,
-    truncate_parent_text,
-)
+from scripts.go_spec_rag.rerank import parent_contexts, truncate_parent_text
 
 
 @given(st.text())
@@ -115,30 +107,6 @@ def test_chunk_sections_rejects_overlap_at_or_above_chunk_size(tmp_path: Path) -
         chunk_sections(sections, chunk_size=100, chunk_overlap=-1, source_file=spec)
 
 
-def test_query_variants_add_spec_terms() -> None:
-    variants = query_variants("Are slices comparable?")
-    assert variants[0] == "Are slices comparable?"
-    assert any("underlying array" in variant for variant in variants)
-    assert any("comparison operators" in variant for variant in variants)
-    assert "slice type underlying array length capacity nil make" in variants
-
-
-def test_tokenize_preserves_identifier_like_terms() -> None:
-    assert tokenize("len(s) and map[K]T") == ["len", "s", "and", "map", "k", "t"]
-
-
-def test_lexical_search_ranks_expected_chunk(tmp_path: Path) -> None:
-    parent = make_parent()
-    slice_chunk = make_chunk("slice-1", parent, "Slice types", "Slices have len and cap.")
-    map_chunk = make_chunk("map-1", parent, "Map types", "Map keys must be comparable.")
-    corpus_path = tmp_path / "corpus.json"
-    corpus = read_write_memory_corpus(corpus_path, [parent], [slice_chunk, map_chunk])
-
-    hits = lexical_search(corpus, ["slice length capacity"], limit=2)
-
-    assert hits[0].chunk_id == "slice-1"
-
-
 def test_corpus_round_trip(tmp_path: Path) -> None:
     parent = make_parent()
     chunk = make_chunk("chunk-1", parent, "Slice types", "A slice has length.")
@@ -151,33 +119,23 @@ def test_corpus_round_trip(tmp_path: Path) -> None:
     assert corpus.chunks_by_id[chunk.id].text == "A slice has length."
 
 
-def test_rerank_merges_vector_and_lexical_scores(tmp_path: Path) -> None:
-    parent = make_parent()
-    slice_chunk = make_chunk("slice-1", parent, "Slice types", "Slices have len and cap.")
-    map_chunk = make_chunk("map-1", parent, "Map types", "Map keys must be comparable.")
-    corpus = read_write_memory_corpus(tmp_path / "corpus.json", [parent], [slice_chunk, map_chunk])
-
-    candidates = merge_scores(
-        corpus=corpus,
-        query="slice capacity",
-        vector_scores={"map-1": 0.4},
-        lexical_scores={"slice-1": 1.0},
-    )
-
-    assert candidates[0].chunk_id == "slice-1"
-
-
 def test_parent_contexts_return_ranked_parent_text(tmp_path: Path) -> None:
     parent = make_parent()
     chunk = make_chunk("slice-1", parent, "Slice types", "Slices have len and cap.")
     corpus = read_write_memory_corpus(tmp_path / "corpus.json", [parent], [chunk])
-    candidates = merge_scores(
-        corpus=corpus,
-        query="slice",
-        vector_scores={"slice-1": 0.8},
-        lexical_scores={},
+    match = SearchMatch(
+        rank=1,
+        id=chunk.id,
+        distance=0.2,
+        title=str(chunk.metadata["title"]),
+        anchor=parent.anchor,
+        url=parent.url,
+        chunk_index=0,
+        text=chunk.text,
+        parent_id=parent.id,
+        score=0.8,
+        vector_score=0.8,
     )
-    match = candidates_to_matches(corpus, candidates)[0]
 
     contexts = parent_contexts(corpus=corpus, matches=[match], limit=1, max_chars=80)
 
@@ -224,47 +182,6 @@ def read_write_memory_corpus(
     path.parent.mkdir(parents=True, exist_ok=True)
     write_corpus(path, parents=parents, chunks=chunks)
     return read_corpus(path)
-
-
-# --- RRF function tests ---
-
-
-def test_scores_to_ranks_preserves_order() -> None:
-    scores = {"a": 0.9, "b": 0.5, "c": 0.7}
-    ranks = scores_to_ranks(scores)
-    assert ranks["a"] == 1  # highest score = rank 1
-    assert ranks["c"] == 2
-    assert ranks["b"] == 3  # lowest score = rank 3
-
-
-def test_scores_to_ranks_empty() -> None:
-    assert scores_to_ranks({}) == {}
-
-
-@given(st.dictionaries(st.text(min_size=1), st.floats(allow_nan=False, allow_infinity=False)))
-def test_scores_to_ranks_length_preserved(scores: dict[str, float]) -> None:
-    ranks = scores_to_ranks(scores)
-    assert len(ranks) == len(scores)
-    assert all(r >= 1 for r in ranks.values())
-
-
-def test_rrf_score_single_list() -> None:
-    vector_ranks = {"a": 1, "b": 2}
-    score = rrf_score("a", vector_ranks, {}, {})
-    assert score == pytest.approx(1.0 / 61)  # 1/(60+1)
-
-
-def test_rrf_score_multiple_lists() -> None:
-    vector_ranks = {"a": 1}
-    lexical_ranks = {"a": 1}
-    title_ranks = {"a": 1}
-    score = rrf_score("a", vector_ranks, lexical_ranks, title_ranks)
-    assert score == pytest.approx(3.0 / 61)  # 3 * 1/(60+1)
-
-
-def test_rrf_score_missing_from_list() -> None:
-    score = rrf_score("missing", {"a": 1}, {"b": 1}, {"c": 1})
-    assert score == 0.0
 
 
 # --- Render function tests ---
@@ -340,159 +257,6 @@ def test_short_sha256_rejects_invalid_length() -> None:
         short_sha256("test", length=0)
     with pytest.raises(ValueError, match="length must be between"):
         short_sha256("test", length=65)
-
-
-# --- normalize_token & tokenize tests ---
-
-
-def test_normalize_token_lowercases() -> None:
-    from scripts.go_spec_rag.lexical import normalize_token
-
-    assert normalize_token("Map") == "map"
-    assert normalize_token("SLICE") == "slice"
-    assert normalize_token("Type") == "type"
-
-
-def test_normalize_token_plural() -> None:
-    from scripts.go_spec_rag.lexical import normalize_token
-
-    assert normalize_token("slices") == "slice"
-    assert normalize_token("types") == "type"
-    assert normalize_token("conversions") == "conversion"
-    # -ies -> -y: "properties" -> "property"
-    assert normalize_token("properties") == "property"
-    # short token: just drop -s
-    assert normalize_token("classes") == "classe"
-
-
-def test_normalize_token_short_words_unchanged() -> None:
-    from scripts.go_spec_rag.lexical import normalize_token
-
-    assert normalize_token("map") == "map"
-    assert normalize_token("nil") == "nil"
-    assert normalize_token("len") == "len"
-    assert normalize_token("cap") == "cap"
-
-
-@given(st.from_regex(r"[A-Za-z_][A-Za-z0-9_]*", fullmatch=True))
-def test_tokenize_round_trip_single_identifier(token: str) -> None:
-    from scripts.go_spec_rag.lexical import normalize_token, tokenize
-
-    result = tokenize(token)
-    assert len(result) >= 1
-    assert all(len(t) > 0 for t in result)
-    # Re-tokenizing a normalized token should be idempotent
-    normalized = normalize_token(token)
-    re_result = tokenize(normalized)
-    assert re_result == result
-
-
-@given(st.lists(st.from_regex(r"[A-Za-z_][A-Za-z0-9_]*")))
-def test_tokenize_always_produces_nonempty_tokens(tokens: list[str]) -> None:
-    from scripts.go_spec_rag.lexical import tokenize
-
-    if not tokens:
-        return
-    text = " ".join(tokens)
-    result = tokenize(text)
-    assert all(len(t) > 0 for t in result)
-
-
-def test_tokenize_handles_punctuation() -> None:
-    from scripts.go_spec_rag.lexical import tokenize
-
-    assert tokenize("len(s) and map[K]T") == ["len", "s", "and", "map", "k", "t"]
-    assert tokenize("a.b(c)") == ["a", "b", "c"]
-    assert tokenize("ptr->field") == ["ptr", "field"]
-
-
-# --- query_variants property tests ---
-
-
-@given(st.text(min_size=1, max_size=100))
-def test_query_variants_always_returns_at_least_one_variant(query: str) -> None:
-    from scripts.go_spec_rag.lexical import query_variants
-
-    variants = query_variants(query)
-    assert len(variants) >= 1
-    assert len(variants) <= 8
-
-
-def test_query_variants_are_deterministic() -> None:
-    from scripts.go_spec_rag.lexical import query_variants
-
-    assert query_variants("Are slices comparable?") == query_variants("Are slices comparable?")
-
-
-def test_query_variants_empty_query() -> None:
-    from scripts.go_spec_rag.lexical import query_variants
-
-    variants = query_variants("")
-    assert len(variants) == 1
-    assert variants[0] == ""
-
-
-def test_query_variants_no_known_terms() -> None:
-    from scripts.go_spec_rag.lexical import query_variants
-
-    variants = query_variants("foo bar baz qux")
-    assert variants[0] == "foo bar baz qux"
-    assert len(variants) >= 1
-    assert len(variants) <= 8
-
-
-def test_query_variants_deduplicates() -> None:
-    from scripts.go_spec_rag.lexical import query_variants
-
-    # Repeated expansions should not produce duplicates
-    variants = query_variants("map slice map")
-    seen = set(variants)
-    assert len(variants) == len(seen)
-
-
-# --- Lexical search edge cases ---
-
-
-def test_lexical_search_empty_variants(tmp_path: Path) -> None:
-    parent = make_parent()
-    chunk = make_chunk("c1", parent, "Slice types", "Slices have length.")
-    corpus = read_write_memory_corpus(tmp_path / "corpus.json", [parent], [chunk])
-
-    from scripts.go_spec_rag.lexical import lexical_search
-
-    hits = lexical_search(corpus, [], limit=5)
-    assert hits == []
-
-
-def test_lexical_search_empty_corpus() -> None:
-    from scripts.go_spec_rag.corpus import Corpus
-    from scripts.go_spec_rag.lexical import lexical_search
-
-    corpus = Corpus(parents={}, chunks=[])
-    hits = lexical_search(corpus, ["slice"], limit=5)
-    assert hits == []
-
-
-def test_lexical_search_no_matches(tmp_path: Path) -> None:
-    parent = make_parent()
-    chunk = make_chunk("c1", parent, "Boolean types", "True and false.")
-    corpus = read_write_memory_corpus(tmp_path / "corpus.json", [parent], [chunk])
-
-    from scripts.go_spec_rag.lexical import lexical_search
-
-    hits = lexical_search(corpus, ["xyzzy"], limit=5)
-    assert hits == []
-
-
-def test_lexical_search_rejects_non_positive_limit(tmp_path: Path) -> None:
-    parent = make_parent()
-    chunk = make_chunk("c1", parent, "Slice types", "Slices have length.")
-    corpus = read_write_memory_corpus(tmp_path / "corpus.json", [parent], [chunk])
-
-    from scripts.go_spec_rag.lexical import lexical_search
-
-    with pytest.raises(ValueError, match="limit"):
-        lexical_search(corpus, ["slice"], limit=0)
 
 
 # --- HTML parsing edge cases ---
@@ -585,32 +349,6 @@ def test_parse_sections_removes_toc_nav(tmp_path: Path) -> None:
     assert "Table of Contents" not in sections[0].text
     assert "alert" not in sections[0].text
     assert sections[0].title == "Types"
-
-
-# --- Rerank diversification tests ---
-
-
-def test_diversify_candidates_per_parent(tmp_path: Path) -> None:
-    from scripts.go_spec_rag.rerank import diversify_candidates_by_parent, merge_scores
-
-    parent = make_parent()
-    chunks = [
-        make_chunk(f"slice-{i}", parent, "Slice types", f"Slice variant {i}.") for i in range(5)
-    ]
-    corpus = read_write_memory_corpus(tmp_path / "corpus.json", [parent], chunks)
-
-    candidates = merge_scores(
-        corpus=corpus,
-        query="slice",
-        vector_scores={f"slice-{i}": 0.9 - i * 0.1 for i in range(5)},
-        lexical_scores={},
-    )
-
-    diversified = diversify_candidates_by_parent(corpus, candidates, limit=8)
-    # Only 2 per parent allowed before filler pass
-    assert len(diversified) == 5
-    assert diversified[0].chunk_id == "slice-0"
-    assert diversified[1].chunk_id == "slice-1"
 
 
 # --- Cross-module: chunk_sections preserves pre/code blocks ---

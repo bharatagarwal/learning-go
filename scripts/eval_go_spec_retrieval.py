@@ -43,11 +43,6 @@ def evaluate_case(case: EvalCase, args: argparse.Namespace) -> dict[str, Any]:
         case.query,
         manifest_path=args.manifest,
         n_results=args.n_results,
-        context_window=args.context_window,
-        retrieval_mode=args.retrieval_mode,
-        semantic_candidates=args.semantic_candidates,
-        lexical_candidates=args.lexical_candidates,
-        parent_results=args.parent_results,
         max_parent_chars=args.max_parent_chars,
         similarity_threshold=args.similarity_threshold,
     )
@@ -97,23 +92,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST_PATH)
     parser.add_argument(
-        "--retrieval-mode",
-        choices=["hybrid", "vector", "lexical", "cosine"],
-        default="hybrid",
-    )
-    parser.add_argument(
         "--similarity-threshold",
         type=float,
         default=0.0,
-        help=(
-            "Drop matches with cosine similarity below this floor. Used by --retrieval-mode cosine."
-        ),
+        help="Drop matches with cosine similarity below this floor.",
     )
     parser.add_argument("--n-results", type=int, default=8)
-    parser.add_argument("--context-window", type=int, default=1)
-    parser.add_argument("--semantic-candidates", type=int, default=32)
-    parser.add_argument("--lexical-candidates", type=int, default=32)
-    parser.add_argument("--parent-results", type=int, default=5)
     parser.add_argument("--max-parent-chars", type=int, default=3500)
     parser.add_argument("--min-recall", type=float, default=0.8)
     parser.add_argument("--json", action="store_true")

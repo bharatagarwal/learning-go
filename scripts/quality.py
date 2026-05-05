@@ -177,13 +177,6 @@ def main() -> int:
                 "Fix the counterexample in the rerank module or strengthen its contract.",
             )
         )
-        run(
-            Gate(
-                "crosshair-lexical",
-                ["crosshair", "check", "scripts/go_spec_rag/lexical.py"],
-                "Fix the counterexample in the lexical module or strengthen its contract.",
-            )
-        )
     except GateFailure as exc:
         print_gate_failure(exc)
         return exc.returncode

@@ -46,7 +46,6 @@ class BenchmarkResult:
     label: str
     runs: int
     wall_ms: list[float] = field(default_factory=list)
-    retrieval_mode: str = "hybrid"
 
     @property
     def count(self) -> int:
@@ -83,7 +82,6 @@ class BenchmarkResult:
     def to_dict(self) -> dict[str, float | str | int]:
         return {
             "label": self.label,
-            "retrieval_mode": self.retrieval_mode,
             "count": self.count,
             "mean_ms": round(self.mean_ms, 1),
             "median_ms": round(self.median_ms, 1),
@@ -106,13 +104,7 @@ def percentile(data: list[float], p: int) -> float:
 def warmup(manifest: Path, query: str = "What is a slice?") -> None:
     """One warmup query to ensure Ollama + Chroma are loaded into memory."""
     with contextlib.suppress(RuntimeError):
-        query_index(
-            query,
-            manifest_path=manifest,
-            n_results=3,
-            context_window=0,
-            retrieval_mode="hybrid",
-        )
+        query_index(query, manifest_path=manifest, n_results=3)
 
 
 def measure(
@@ -120,10 +112,11 @@ def measure(
     *,
     manifest: Path,
     runs: int,
-    retrieval_mode: str,
+    n_results: int,
+    similarity_threshold: float,
 ) -> BenchmarkResult:
-    label = f"retrieval ({retrieval_mode}, {len(queries)} queries x {runs} runs)"
-    result = BenchmarkResult(label=label, runs=runs, retrieval_mode=retrieval_mode)
+    label = f"retrieval (cosine, {len(queries)} queries x {runs} runs, n={n_results})"
+    result = BenchmarkResult(label=label, runs=runs)
 
     for _run_index in range(runs):
         for query in queries:
@@ -132,9 +125,8 @@ def measure(
                 query_index(
                     query,
                     manifest_path=manifest,
-                    n_results=6,
-                    context_window=1,
-                    retrieval_mode=retrieval_mode,
+                    n_results=n_results,
+                    similarity_threshold=similarity_threshold,
                 )
                 elapsed = (time.perf_counter() - start) * 1000
                 result.wall_ms.append(elapsed)
@@ -190,13 +182,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=len(DEFAULT_QUERIES),
         help="Number of queries to use from the default set (default: all).",
     )
-    parser.add_argument(
-        "--mode",
-        choices=["hybrid", "vector", "lexical"],
-        default="hybrid",
-        help="Retrieval mode(s) to benchmark. Default runs all three.",
-        nargs="+",
-    )
+    parser.add_argument("--n-results", type=int, default=8)
+    parser.add_argument("--similarity-threshold", type=float, default=0.0)
     parser.add_argument("--json", action="store_true", help="Output as JSON.")
     return parser
 
@@ -212,7 +199,7 @@ def main() -> int:
 
     queries = DEFAULT_QUERIES[: args.queries]
     print(
-        f"Benchmarking {len(queries)} queries x {args.runs} runs modes={args.mode}...",
+        f"Benchmarking {len(queries)} queries x {args.runs} runs (cosine)...",
         file=sys.stderr,
     )
 
@@ -221,16 +208,15 @@ def main() -> int:
     warmup(args.manifest)
     print("  Warmup complete.\n", file=sys.stderr)
 
-    results: list[BenchmarkResult] = []
-    for mode in args.mode:
-        print(f"  Measuring mode={mode}...", file=sys.stderr)
-        result = measure(
-            queries,
-            manifest=args.manifest,
-            runs=args.runs,
-            retrieval_mode=mode,
-        )
-        results.append(result)
+    print("  Measuring...", file=sys.stderr)
+    result = measure(
+        queries,
+        manifest=args.manifest,
+        runs=args.runs,
+        n_results=args.n_results,
+        similarity_threshold=args.similarity_threshold,
+    )
+    results = [result]
 
     if args.json:
         payload = {

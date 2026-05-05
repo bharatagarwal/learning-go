@@ -18,34 +18,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Embed a question with the manifest's Ollama model and retrieve relevant "
-            "Go spec chunks from ChromaDB."
+            "Go spec chunks from ChromaDB via cosine top-K."
         )
     )
     parser.add_argument("query", nargs="?", help="Question or search query.")
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST_PATH)
-    parser.add_argument("--n-results", type=int, default=6)
-    parser.add_argument(
-        "--context-window",
-        type=int,
-        default=1,
-        help="Include this many adjacent chunks on each side of each semantic hit.",
-    )
-    parser.add_argument(
-        "--retrieval-mode",
-        choices=["hybrid", "vector", "lexical", "cosine"],
-        default="hybrid",
-    )
+    parser.add_argument("--n-results", type=int, default=8)
     parser.add_argument(
         "--similarity-threshold",
         type=float,
         default=0.0,
-        help=(
-            "Drop matches with cosine similarity below this floor. Used by --retrieval-mode cosine."
-        ),
+        help="Drop matches with cosine similarity below this floor.",
     )
-    parser.add_argument("--semantic-candidates", type=int, default=32)
-    parser.add_argument("--lexical-candidates", type=int, default=32)
-    parser.add_argument("--parent-results", type=int, default=5)
     parser.add_argument("--max-parent-chars", type=int, default=5000)
     parser.add_argument(
         "--format",
@@ -76,13 +60,8 @@ def main() -> int:
             args.query,
             manifest_path=args.manifest,
             n_results=args.n_results,
-            context_window=args.context_window,
-            retrieval_mode=args.retrieval_mode,
-            semantic_candidates=args.semantic_candidates,
-            lexical_candidates=args.lexical_candidates,
-            parent_results=args.parent_results,
-            max_parent_chars=args.max_parent_chars,
             similarity_threshold=args.similarity_threshold,
+            max_parent_chars=args.max_parent_chars,
         )
         if output_format == "json":
             print(render_json(payload), end="")

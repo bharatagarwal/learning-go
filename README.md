@@ -39,20 +39,17 @@ embedding model, embedding dimension, Ollama URL, and query prefix.
 uv run python scripts/query_go_spec.py "When is a Go type comparable?" --format codex
 ```
 
-The query command always reads `.rag/go_spec_manifest.json`. It expands the query
-deterministically, embeds those variants with the exact model and query prefix
-recorded there, retrieves cosine nearest-neighbor chunks from Chroma, runs BM25-style
-lexical retrieval over the corpus sidecar, merges both candidate pools, reranks with
-title/anchor overlap, and returns parent sections plus child evidence.
+The query command always reads `.rag/go_spec_manifest.json`. It embeds the query
+once with the model and query prefix recorded there, asks ChromaDB for top-K
+nearest neighbors by cosine distance, optionally drops matches below a similarity
+threshold, and returns parent sections with child evidence chunks.
 
 Useful options:
 
-- `--n-results 6`: number of semantic nearest-neighbor hits.
-- `--context-window 1`: adjacent chunks to include around each hit.
-- `--retrieval-mode hybrid`: choose `hybrid`, `vector`, or `lexical`.
-- `--semantic-candidates 32` and `--lexical-candidates 32`: candidate pool sizes.
-- `--parent-results 5`: number of parent sections returned for answering.
-- `--format json`: machine-readable retrieval payload.
+- `--n-results 8`: number of cosine nearest-neighbor hits returned (default: 8).
+- `--similarity-threshold 0.6`: drop matches with cosine similarity below this floor.
+- `--max-parent-chars 5000`: per-parent text limit before truncation.
+- `--format json|markdown|codex`: output format. `codex` is a grounding packet for agents.
 - `--status`: verify that the manifest and collection are present.
 
 ## Retrieval Evaluation
@@ -69,26 +66,19 @@ whenever a retrieval failure or surprising answer appears.
 Useful options:
 
 - `--min-recall 0.8`: minimum anchor recall threshold (default: 0.8).
-- `--retrieval-mode hybrid`: override the retrieval mode.
+- `--n-results 8`: tune top-K returned per query.
+- `--similarity-threshold 0.5`: tighten/loosen the cosine floor.
 - `--json`: machine-readable output for CI pipelines.
-- `--n-results 8` and `--context-window 1`: tune retrieval parameters.
 
 ## Benchmark
 
-Measure retrieval latency across hybrid, vector, and lexical modes:
-
 ```bash
 uv run python scripts/benchmark_retrieval.py
-```
-
-```bash
 uv run python scripts/benchmark_retrieval.py --runs 20 --queries 4 --json
 ```
 
-The benchmark runs a set of 10 queries against the built index, reports mean,
-median, p95, and p99 latency in milliseconds. Add `--json` for machine-readable
-output. Run `uv run python scripts/benchmark_retrieval.py --mode hybrid vector` to
-compare retrieval strategies.
+The benchmark runs the default 10-query set against the built index and reports
+mean, median, p95, and p99 latency in milliseconds.
 
 ## Model Notes
 
@@ -118,8 +108,8 @@ uv run python scripts/quality.py
 
 This runs Ruff formatting and linting, Bandit, Semgrep OSS default rules,
 basedpyright, Ruff C901 complexity, Radon, deal lint, pytest with Hypothesis tests,
-and CrossHair over `pure.py`, `rerank.py`, and `lexical.py`. Gate failures are
-wrapped with an agent instruction that says how to fix the class of problem.
+and CrossHair over `pure.py` and `rerank.py`. Gate failures are wrapped with an
+agent instruction that says how to fix the class of problem.
 
 CrossHair performs symbolic execution against `@deal` contracts, finding
 counterexamples by exploring edge cases in pure functions. If a contract is too weak
@@ -133,9 +123,8 @@ The retrieval pipeline is split into focused modules:
 |--------|----------------|
 | `parse.py` | HTML → structured sections (BeautifulSoup) |
 | `indexing.py` | Sections → chunks → ChromaDB embeddings |
-| `lexical.py` | BM25L search, tokenization, query expansion |
-| `rerank.py` | RRF fusion, per-parent diversification, parent assembly |
-| `retrieval.py` | Orchestration: query → vector + lexical → rerank → format |
+| `retrieval.py` | Cosine top-K query against ChromaDB with optional threshold |
+| `rerank.py` | Parent-section assembly and text truncation |
 | `ollama.py` | Ollama HTTP embedding client with retry |
 | `pure.py` | Pure functions with formal contracts (SHA-256, cleaning, etc.) |
 | `render.py` | Output formatting (codex/markdown/json) |
@@ -147,13 +136,11 @@ Key design decisions:
 
 - **Manifest as contract**: Every query checks `go_spec_manifest.json` so the
   retrieval is pinned to a specific source file, chunk size, and embedding model.
-- **Hybrid retrieval with RRF**: Cosine vector search + BM25L, fused via
-  Reciprocal Rank Fusion (Cormack et al. 2009, k=60).
-- **Deterministic query expansion**: Hardcoded domain expansions, not LLM-generated
-  synonyms.
+- **Pure cosine top-K**: One query embedding, ChromaDB nearest-neighbor search,
+  optional similarity floor. No query expansion, no lexical fusion, no rerank
+  weights — empirically it matched a hybrid pipeline on this corpus while being
+  far simpler.
 - **Fail-fast**: `truncate: false` on embeddings, clear error messages with
   actionable commands for rebuilds.
-- **Per-parent diversification**: At most 2 child chunks per parent section to
-  keep answers broad.
 - **Formal contracts**: `deal` pre/post-conditions on pure functions, checked at
   runtime and verified by CrossHair symbolic execution.

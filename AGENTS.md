@@ -4,18 +4,18 @@ When the user asks a question that should be grounded in the Go language specifi
 run the local retrieval command before answering:
 
 ```bash
-uv run python scripts/query_go_spec.py "<question>" --format codex --n-results 6
+uv run python scripts/query_go_spec.py "<question>" --format codex --n-results 8
 ```
 
 Answer only from the retrieved chunks. Cite the section title and URL for each factual
 claim that depends on the spec. If the chunks do not contain enough evidence, say so
 and either run a narrower follow-up retrieval or explain what is missing.
 
-The query command uses hybrid retrieval by default: deterministic query variants,
-cosine vector search, BM25-style lexical search, title/anchor reranking, parent
-section context, and adjacent child chunks. Keep the defaults unless the grounding
-packet is too large; use `--context-window 0` only for raw nearest-neighbor
-inspection.
+Retrieval is pure cosine top-K against ChromaDB. One query embedding, one nearest-
+neighbor search, optional similarity floor via `--similarity-threshold`. No query
+expansion, no lexical fusion, no per-parent diversification — the empirical eval
+showed this matched a more complex hybrid pipeline while being simpler to reason
+about.
 
 The query command reads `.rag/go_spec_manifest.json` and embeds the question with the
 same Ollama embedding model used to build the ChromaDB collection. Do not pass a
