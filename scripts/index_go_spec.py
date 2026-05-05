@@ -99,7 +99,7 @@ def main() -> int:
         print("--batch-size must be positive", file=sys.stderr)
         return 2
 
-    sections = parse_sections(args.spec_html)
+    sections = parse_sections(args.spec_html.read_text(encoding="utf-8"))
     parents = build_parent_records(sections)
     records = chunk_sections(
         sections,

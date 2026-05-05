@@ -28,12 +28,12 @@ def write_corpus(path: Path, *, parents: list[ParentRecord], chunks: list[ChunkR
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def read_corpus(path: Path) -> Corpus:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise RuntimeError(f"Corpus sidecar not found: {path}. Rebuild the index.") from exc
+def parse_corpus(payload: dict[str, Any]) -> Corpus:
+    """Build a Corpus from a deserialized JSON payload.
 
+    Pure: takes an already-parsed dict, returns a Corpus. File I/O is
+    the caller's responsibility.
+    """
     parents = [parent_from_dict(item) for item in payload["parents"]]
     chunks = [chunk_from_dict(item) for item in payload["chunks"]]
     return Corpus(

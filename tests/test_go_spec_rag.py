@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from scripts.go_spec_rag.corpus import Corpus, read_corpus, write_corpus
+from scripts.go_spec_rag.corpus import Corpus, parse_corpus, write_corpus
 from scripts.go_spec_rag.indexing import batched, chunk_sections
 from scripts.go_spec_rag.models import ChunkRecord, ParentRecord, SearchMatch
 from scripts.go_spec_rag.parse import parse_sections
@@ -54,7 +55,7 @@ def test_parse_sections_and_chunk_small_html(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    sections = parse_sections(spec)
+    sections = parse_sections(spec.read_text(encoding="utf-8"))
     assert [section.title for section in sections] == ["Types", "Boolean types"]
     records = chunk_sections(sections, chunk_size=200, source_file=spec)
     assert len(records) == 2
@@ -82,7 +83,7 @@ def test_chunk_sections_with_overlap_extends_chunks(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    sections = parse_sections(spec)
+    sections = parse_sections(spec.read_text(encoding="utf-8"))
     no_overlap = chunk_sections(sections, chunk_size=400, chunk_overlap=0, source_file=spec)
     with_overlap = chunk_sections(sections, chunk_size=400, chunk_overlap=80, source_file=spec)
 
@@ -100,7 +101,7 @@ def test_chunk_sections_rejects_overlap_at_or_above_chunk_size(tmp_path: Path) -
         '<html><body><article><h2 id="X">X</h2><p>text</p></article></body></html>',
         encoding="utf-8",
     )
-    sections = parse_sections(spec)
+    sections = parse_sections(spec.read_text(encoding="utf-8"))
     with pytest.raises(ValueError, match="chunk_overlap"):
         chunk_sections(sections, chunk_size=100, chunk_overlap=100, source_file=spec)
     with pytest.raises(ValueError, match="chunk_overlap"):
@@ -113,7 +114,7 @@ def test_corpus_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "corpus.json"
 
     write_corpus(path, parents=[parent], chunks=[chunk])
-    corpus = read_corpus(path)
+    corpus = parse_corpus(json.loads(path.read_text(encoding="utf-8")))
 
     assert corpus.parents[parent.id].title == "Slice types"
     assert corpus.chunks_by_id[chunk.id].text == "A slice has length."
@@ -181,7 +182,7 @@ def read_write_memory_corpus(
 ) -> Corpus:
     path.parent.mkdir(parents=True, exist_ok=True)
     write_corpus(path, parents=parents, chunks=chunks)
-    return read_corpus(path)
+    return parse_corpus(json.loads(path.read_text(encoding="utf-8")))
 
 
 # --- Render function tests ---
@@ -285,7 +286,7 @@ def test_parse_sections_multi_section_html(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    sections = parse_sections(spec)
+    sections = parse_sections(spec.read_text(encoding="utf-8"))
     titles = [section.title for section in sections]
     assert titles == [
         "Introduction",
@@ -343,7 +344,7 @@ def test_parse_sections_removes_toc_nav(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    sections = parse_sections(spec)
+    sections = parse_sections(spec.read_text(encoding="utf-8"))
     assert len(sections) == 1
     assert "Navigation" not in sections[0].text
     assert "Table of Contents" not in sections[0].text
@@ -372,7 +373,7 @@ func main() {
         encoding="utf-8",
     )
 
-    sections = parse_sections(spec)
+    sections = parse_sections(spec.read_text(encoding="utf-8"))
     assert len(sections) == 1
     records = chunk_sections(sections, chunk_size=500, source_file=spec)
     assert len(records) == 1

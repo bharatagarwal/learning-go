@@ -98,16 +98,6 @@ class Manifest:
         )
 
     @classmethod
-    def read(cls, path: Path) -> Manifest:
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError as exc:
-            raise RuntimeError(
-                f"Manifest not found: {path}. Run: uv run python scripts/index_go_spec.py"
-            ) from exc
-        return cls.from_dict(data)
-
-    @classmethod
     def from_dict(cls, data: JsonObject) -> Manifest:
         return cls(
             schema_version=int(data["schema_version"]),

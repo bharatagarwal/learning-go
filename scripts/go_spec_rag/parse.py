@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import cast
 
 from bs4 import BeautifulSoup
@@ -12,8 +11,11 @@ from scripts.go_spec_rag.models import Section
 from scripts.go_spec_rag.pure import clean_text
 
 
-def parse_sections(spec_html: Path) -> list[Section]:
-    """Parse the Go spec HTML file into a list of sections.
+def parse_sections(html: str) -> list[Section]:
+    """Parse Go spec HTML into a list of sections.
+
+    Pure: takes already-loaded HTML text, returns structured sections.
+    File I/O is the caller's responsibility.
 
     This is the single entry point for HTML parsing. It handles:
     - Document structure detection (article element)
@@ -21,7 +23,6 @@ def parse_sections(spec_html: Path) -> list[Section]:
     - Section boundary detection (headings with IDs)
     - Text extraction with code block preservation
     """
-    html = spec_html.read_text(encoding="utf-8")
     soup = BeautifulSoup(html, "lxml")
     article = _select_article(soup)
     _remove_boilerplate(article)

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, cast
 
 import chromadb
 
 from scripts.go_spec_rag.config import ROOT
-from scripts.go_spec_rag.corpus import Corpus, read_corpus
+from scripts.go_spec_rag.corpus import Corpus, parse_corpus
 from scripts.go_spec_rag.models import Manifest, SearchMatch
 from scripts.go_spec_rag.ollama import OllamaEmbeddingClient
 from scripts.go_spec_rag.pure import bounded_int, sha256_bytes, sha256_file
@@ -23,7 +24,22 @@ def resolve_repo_path(path: str) -> Path:
 
 
 def load_manifest(path: Path) -> Manifest:
-    return Manifest.read(resolve_manifest_path(path))
+    resolved = resolve_manifest_path(path)
+    try:
+        data = json.loads(resolved.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"Manifest not found: {resolved}. Run: uv run python scripts/index_go_spec.py"
+        ) from exc
+    return Manifest.from_dict(data)
+
+
+def load_corpus(path: Path) -> Corpus:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Corpus sidecar not found: {path}. Rebuild the index.") from exc
+    return parse_corpus(payload)
 
 
 def manifest_file_sha(path: Path) -> str:
@@ -84,7 +100,7 @@ def query_index(
     surviving match.
     """
     manifest = load_manifest(manifest_path)
-    corpus = read_corpus(resolve_repo_path(manifest.index.corpus_path))
+    corpus = load_corpus(resolve_repo_path(manifest.index.corpus_path))
     collection = get_collection(
         resolve_repo_path(manifest.index.chroma_path),
         manifest.index.collection,
